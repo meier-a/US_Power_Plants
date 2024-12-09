@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>U.S. Power Plants</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+
+    <style>
+        /* style options in css*/
+        html, body, #map { 
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            background: #fff;
+            font-family: 'Titillium Web', sans-serif;
+        }
+
+        /* links*/
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* title*/
+        h1 {
+            position: absolute;
+            left: 30px;
+            top: 20px;
+            padding: 5px 1%;
+            margin: 0;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            color: black;
+            font-size: 1.5em;
+            z-index: 1000;
+            border-radius: 5px;
+        }
+
+        /* dropdown menue*/
+        #sourceSelect {
+            position: absolute;
+            top: 20px;
+            right: 180px;
+            z-index: 1000;
+            background: white;
+            padding: 2px;
+            width: auto;
+            max-width: 200px;
+        }
+
+        /* infobox on the right top corner*/
+        #infoBox {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border: 1px solid #ccc;
+            max-width: 250px;
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 5px;
+        }
+
+
+        #infoBox h4 {
+            margin-top: 0;
+            margin-bottom: 0px;
+        }
+
+        #infoBox .total-plants {
+            margin-bottom: 15px; 
+        }
+
+        #infoBox .source-title {
+            margin-bottom: 0px;
+            font-weight: bold;
+        }
+
+        /* controle element*/
+        .custom-zoom-control {
+            background-color: white;
+            padding: 2px;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            bottom: 20px;
+        }
+        .custom-zoom-control button {
+            width: 30px; 
+            height: 30px;
+            font-size: 18px; 
+            font-weight: bold; 
+            display: block; 
+            margin-bottom: 5px; 
+        }
+
+        /* welcome box/ popup info box*/
+        .welcome-popup {
+            position: fixed; 
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); 
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 2000;
+            max-width: 80%;
+            max-height: 100%;
+            overflow-y: auto;
+            margin-top: 0px;
+        }
+
+        .welcome-popup h2{
+            margin-top: 0px;
+        }
+
+        .welcome-popup button {
+            display: block;
+            margin-top: 10px;
+        }
+
+        /* legend*/
+        .legend {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+        
+        .legend h4 {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            margin-top: 0px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .legend-circle {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+   </style>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css?family=Titillium+Web" rel="stylesheet">
+</head>
+<body>
+    <!--map container-->
+    <div id="map"></div>
+
+    <!--title-->
+    <h1>U.S. Power Plants</h1>
+
+    <!--dropdown menue-->
+    <select id="sourceSelect"> 
+        <option value="all">All Sources</option>
+    </select>
+    <!--infobox in the top right corner-->
+    <div id="infoBox">Hover over a State</div>
+
+    <!--welcome popup content-->
+    <div id="welcomePopup" class="welcome-popup">
+        <h2>Welcome to U.S. Power Plants Map</h2>
+        <p>
+            This interactive map shows the distribution of power generation sources in the United States. Power plants are represented as proportional circles that visualise the concentration of different energy sources, from fossil fuels to renewables. It provides a complement to the New York Times article
+            <a href="https://www.nytimes.com/2024/11/12/climate/fossil-fuel-emissions-2024-record.html" target="_blank">
+                "Fossil Fuels Are Still Winning: Global Emissions Head for a Record"
+            </a> (November 12, 2024).</p>
+        <p>
+            You can explore the map by: Filter power plants by energy source using the drop-down menu or get detailed state-level information by hovering over each area.
+        </p>
+        
+        <button onclick="closeWelcomePopup()">Close</button>
+    </div>
+
+    <!--here comes the JS script-->
+    <script>
+        var mymap = L.map('map', {
+            center: [40, -98],
+            zoom: 4,
+            zoomControl: false
+        });
+
+        //basemap
+        var CartoDB_DarkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a> <br>' +
+                'Power Plant Data: <a href="https://atlas.eia.gov/datasets/eia::power-plants/explore?location=29.746965%2C61.504000%2C2.98">U.S. Energy Information Administration</a> | ' +
+                'State Boundary: <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.html">U.S. Census Bureau</a>',
+            subdomains: 'abcd'
+        }).addTo(mymap);
+
+        var statesLayer;
+        var powerPlantsByState = {};
+        var powerPlantsByStateAndSource = {};
+
+        //legend
+        var legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = '<h4>Power Plants</h4>';
+            return div;
+        };
+        legend.addTo(mymap);
+
+        //how to calculate radius for circles and legend
+        function calcRadius(value, maxValue) {
+            const maxRadius = 50;
+            const minRadius = 5;
+            return Math.max(minRadius, (value / maxValue) * maxRadius);
+        }
+
+        function updateLegend(selectedSource, maxValue) {
+            var div = document.querySelector('.legend');
+            var content = '<h4>Power Plants</h4>';
+            var sizes = [maxValue * 0.1, maxValue * 0.5, maxValue];
+
+            sizes.forEach(function (size) {
+                var radius = calcRadius(size, maxValue);
+                content += '<div class="legend-item"><span class="legend-circle" style="width:' + (radius * 2) +
+                    'px; height:' + (radius * 2) + 'px; background-color:' +
+                    (selectedSource === 'all' ? '#808080' : sourceColors[selectedSource]) +
+                    ';"></span> ' + Math.round(size) + '</div>';
+            });
+
+            div.innerHTML = content;
+        }
+
+        //load data
+        fetch('assets/data.geojson')
+            .then(response => response.json())
+            .then(data => {
+                var sources = new Set(['all']);
+                var maxValues = { all: 0 };
+
+                data.features.forEach(feature => {
+                    var state = feature.properties.name;
+                    powerPlantsByState[state] = feature.properties.all;
+                    powerPlantsByStateAndSource[state] = {};
+
+                    maxValues.all = Math.max(maxValues.all, feature.properties.all);
+
+                    for (let source in feature.properties) {
+                        if (source !== 'name' && source !== 'all' && source !== 'objectid') {
+                            sources.add(source);
+                            powerPlantsByStateAndSource[state][source] = feature.properties[source];
+                            if (!maxValues[source]) maxValues[source] = 0;
+                            maxValues[source] = Math.max(maxValues[source], feature.properties[source]);
+                        }
+                    }
+                });
+
+                //load data depending on the selection of the dropdown menue
+                var sourceSelect = document.getElementById('sourceSelect');
+                sources.forEach(source => {
+                    if (source !== 'all' && source !== 'objectid') {
+                        var option = document.createElement('option');
+                        option.value = source;
+                        option.textContent = source.charAt(0).toUpperCase() + source.slice(1);
+                        sourceSelect.appendChild(option);
+                    }
+                });
+
+                function updateCircles(selectedSource) {
+                    var maxValue = maxValues[selectedSource] || 1;
+
+                    statesLayer.eachLayer(function (layer) {
+                        var state = layer.feature.properties.name;
+                        var count = selectedSource === 'all' ?
+                            powerPlantsByState[state] :
+                            powerPlantsByStateAndSource[state][selectedSource] || 0;
+
+                        var radius = calcRadius(count, maxValue);
+                        var circleCoords = state === "Alaska" ? [64.2008, -149.4937] : layer.getBounds().getCenter(); // the circle of alaska showed up in norway so it was defind manually
+
+                        var circle = L.circleMarker(circleCoords, {
+                            radius: radius,
+                            fillColor: selectedSource === 'all' ? '#808080' : sourceColors[selectedSource],
+                            color: '#000',
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        });
+
+                        circle.bindPopup(`<b>${state}</b><br>${selectedSource}: ${count}`);
+                        layer.circle = circle;
+                        circle.addTo(mymap);
+                    });
+
+                    updateLegend(selectedSource, maxValue); //update legend on the selection of the dropdown menue
+                }
+
+                //state boundary
+                statesLayer = L.geoJSON(data, {
+                    style: { fillColor: 'transparent', color: '#808080', weight: 1 },
+                    onEachFeature: function (feature, layer) {
+                        layer.on({
+                            mouseover: highlightFeature, //functions are defined later in the code
+                            mouseout: resetHighlight,
+                            click: zoomToFeature
+                        });
+                    }
+                }).addTo(mymap);
+
+                updateCircles('all');
+
+                sourceSelect.addEventListener('change', function () {
+                    mymap.eachLayer(function (layer) {
+                        if (layer instanceof L.CircleMarker) {
+                            mymap.removeLayer(layer);
+                        }
+                    });
+                    updateCircles(this.value);
+                });
+            });
+
+        //functions of the state boundary layer
+        function highlightFeature(e) {
+            var layer = e.target;
+            layer.setStyle({ weight: 3, color: '#666', dashArray: '', fillOpacity: 0.7 });
+            updateInfoBox(layer.feature.properties);
+        }
+
+        function resetHighlight(e) {
+            statesLayer.resetStyle(e.target);
+            updateInfoBox({});
+        }
+
+        function zoomToFeature(e) {
+            mymap.fitBounds(e.target.getBounds());
+        }
+
+        //updates the info box (top right corner) when hover over a state
+        function updateInfoBox(props) {
+            var infoBox = document.getElementById('infoBox');
+
+            if (props.name) {
+                var stateName = props.name;
+                var powerPlantCount = powerPlantsByState[stateName] || 0;
+                var sourceBreakdown = powerPlantsByStateAndSource[stateName] || {};
+
+                var infoContent = `<h4>${stateName}</h4>`;
+                infoContent += `<div class="total-plants">Total Plants: ${powerPlantCount}</div>`;
+                infoContent += `<div class="source-title">By Source:</div>`;
+
+                for (let source in sourceBreakdown) {
+                    infoContent += `${source.charAt(0).toUpperCase() + source.slice(1)}: ${sourceBreakdown[source]}<br>`;
+                }
+
+                infoBox.innerHTML = infoContent;
+            } else {
+                infoBox.innerHTML = "Hover over a State";
+            }
+        }
+
+        //welcome popup
+        function closeWelcomePopup() {
+            document.getElementById('welcomePopup').style.display = 'none';
+        }
+
+        function openWelcomePopup() {
+            document.getElementById('welcomePopup').style.display = 'block';
+        }
+
+        //define the color of the circles for each source
+        var sourceColors = {
+            'biomass': '#8BC34A',
+            'batteries': '#FF5722',
+            'petroleum': '#9C27B0',
+            'wind': '#03A9F4',
+            'solar': '#FFEB3B',
+            'hydroelectric': '#2196F3',
+            'natural gas': '#795548',
+            'nuclear': '#F44336',
+            'pumped storage': '#4CAF50',
+            'other': '#9E9E9E',
+            'coal': '#607D8B',
+            'geothermal': '#FFA500'
+        };
+
+
+        //scale bar
+        L.control.scale({ position: 'bottomleft', imperial: false }).addTo(mymap);
+
+        //customized zoom element in the bottom left corner
+        var customZoomControl = L.control({position:'bottomleft'});
+        customZoomControl.onAdd = function (map) {
+            var container = L.DomUtil.create('div', 'custom-zoom-control');
+            var zoomInButton = L.DomUtil.create('button', '', container);
+            zoomInButton.innerHTML = '+';
+            L.DomEvent.on(zoomInButton, 'click', function () {
+                map.zoomIn();
+            });
+            var resetButton = L.DomUtil.create('button', '', container);
+            resetButton.innerHTML = '⟲';
+            L.DomEvent.on(resetButton, 'click', function () {
+                map.setView([40, -98], 4);
+            });
+            var zoomOutButton = L.DomUtil.create('button', '', container);
+            zoomOutButton.innerHTML = '-';
+            L.DomEvent.on(zoomOutButton, 'click', function () {
+                map.zoomOut();
+            });
+            var infoButton = L.DomUtil.create('button', '', container);
+            infoButton.innerHTML = 'i';
+            L.DomEvent.on(infoButton, 'click', function () {
+                openWelcomePopup();
+            });
+            return container;
+        };
+        customZoomControl.addTo(mymap);
+
+    </script>
+</body>
+
+</html>
